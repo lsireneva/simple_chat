@@ -8,20 +8,21 @@
 
     <android.support.v7.widget.RecyclerView
         android:id="@+id/rvChat"
-        android:transcriptMode="alwaysScroll"
-        android:layout_alignParentTop="true"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_above="@+id/llContainer"
         android:layout_alignParentLeft="true"
         android:layout_alignParentRight="true"
-        android:layout_above="@+id/llContainer"
-        android:layout_width="wrap_content"
-        android:layout_height="match_parent" />
+        android:layout_alignParentTop="true"
+        android:transcriptMode="alwaysScroll" />
 
 
-    <LinearLayout
+    <RelativeLayout
         android:id="@+id/llContainer"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_below="@+id/rvChat"
+        android:layout_alignParentBottom="true"
+
         android:orientation="horizontal">
 
 
@@ -29,15 +30,19 @@
             android:id="@+id/etMessage"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:hint="Enter a message"/>
+            android:layout_alignParentLeft="true"
+            android:layout_toLeftOf="@+id/btnSend"
+            android:layout_toStartOf="@+id/btnSend"
+            android:hint="Enter a message" />
 
         <Button
             android:id="@+id/btnSend"
+            android:layout_alignParentRight="true"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Send"/>
 
-    </LinearLayout>
+    </RelativeLayout>
 
 </RelativeLayout>
 

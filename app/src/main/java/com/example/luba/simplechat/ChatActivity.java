@@ -29,27 +29,26 @@ import java.util.List;
 public class ChatActivity extends AppCompatActivity {
 
     static final String TAG = ChatActivity.class.getSimpleName();
+    static final int MAX_CHAT_MESSAGES_TO_SHOW = 50;
     static final String USER_ID_KEY = "userId";
-
     static final String BODY_KEY = "body";
 
     EditText etMessage;
     Button btSend;
     RecyclerView rvChat;
 
-    ArrayList<Message> mMessages;
 
+    ArrayList<Message> mMessages;
     ChatAdapter mAdapter;
-    static final int MAX_CHAT_MESSAGES_TO_SHOW = 50;
+    // Create a handler which can run code periodically
+
+    static final int POLL_INTERVAL = 1000; // milliseconds
+
 
     // Keep track of initial load to scroll to the bottom of the ListView
-
     boolean mFirstLoad;
 
 
-// Create a handler which can run code periodically
-
-    static final int POLL_INTERVAL = 1000; // milliseconds
 
     Handler myHandler = new Handler();  // android.os.Handler
 
@@ -63,12 +62,25 @@ public class ChatActivity extends AppCompatActivity {
 
     };
 
-
     @Override
-
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_chat);
+        // Find the text field and button
+
+        etMessage = (EditText) findViewById(R.id.etMessage);
+
+        btSend = (Button) findViewById(R.id.btnSend);
+        rvChat = (RecyclerView) findViewById(R.id.rvChat);
+        rvChat.hasFixedSize();
+        // associate the LayoutManager with the RecylcerView
+
+        final LinearLayoutManager linearLayoutManager = new LinearLayoutManager(ChatActivity.this);
+
+        linearLayoutManager.setReverseLayout(true);
+        rvChat.setLayoutManager(linearLayoutManager);
+
+        mMessages = new ArrayList<>();
 
         // User login
         if (ParseUser.getCurrentUser() != null) { // start with existing user
@@ -78,8 +90,7 @@ public class ChatActivity extends AppCompatActivity {
 
             login();
         }
-        //myHandler.postDelayed(mRefreshMessagesRunnable, POLL_INTERVAL);
-
+        myHandler.postDelayed(mRefreshMessagesRunnable, POLL_INTERVAL);
         ParseLiveQueryClient parseLiveQueryClient = ParseLiveQueryClient.Factory.getClient();
 
         ParseQuery<Message> parseQuery = ParseQuery.getQuery(Message.class);
@@ -109,162 +120,123 @@ public class ChatActivity extends AppCompatActivity {
                             }
                         });
                     }
-        }
+                });
     }
 
-                    // Get the userId from the cached currentUser object
-                    void startWithCurrentUser() {
-                        setupMessagePosting();
+    // Get the userId from the cached currentUser object
+    void startWithCurrentUser() {
+        setupMessagePosting();
+    }
+
+    void setupMessagePosting() {
+
+        mFirstLoad = true;
+
+        final String userId = ParseUser.getCurrentUser().getObjectId();
+
+        mAdapter = new ChatAdapter(ChatActivity.this, userId, mMessages);
+
+        rvChat.setAdapter(mAdapter);
+
+
+
+        // When send button is clicked, create message object on Parse
+
+        btSend.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                String data = etMessage.getText().toString();
+                Message message = new Message();
+                message.setBody(data);
+                Log.d ("DEBUG", "BODY="+ message.getBody());
+                message.setUserId(ParseUser.getCurrentUser().getObjectId());
+
+                message.saveInBackground(new SaveCallback() {
+
+                    @Override
+                    public void done(ParseException e) {
+                        if (e == null) {
+                            Toast.makeText(ChatActivity.this, "Successfully created message on Parse",
+                                    Toast.LENGTH_SHORT).show();
+                        } else {
+                            Log.e(TAG, "Failed to save message", e);
+                        }
+
                     }
 
-                    void setupMessagePosting() {
+                });
+                etMessage.setText(null);
 
-                        // Find the text field and button
+            }
 
-                        etMessage = (EditText) findViewById(R.id.etMessage);
+        });
 
-                        btSend = (Button) findViewById(R.id.btnSend);
-                        rvChat = (RecyclerView) findViewById(R.id.rvChat);
+    }
 
-                        mMessages = new ArrayList<>();
 
-                        mFirstLoad = true;
+    void refreshMessages() {
 
-                        final String userId = ParseUser.getCurrentUser().getObjectId();
+        // Construct query to execute
 
-                        mAdapter = new ChatAdapter(ChatActivity.this, userId, mMessages);
+        ParseQuery<Message> query = ParseQuery.getQuery(Message.class);
 
-                        rvChat.setAdapter(mAdapter);
+        // Configure limit and sort order
+        query.setLimit(MAX_CHAT_MESSAGES_TO_SHOW);
 
-                        // associate the LayoutManager with the RecylcerView
 
-                        final LinearLayoutManager linearLayoutManager = new LinearLayoutManager(ChatActivity.this);
+        // get the latest 50 messages, order will show up newest to oldest of this group
 
-                        linearLayoutManager.setReverseLayout(true);
+        query.orderByDescending("createdAt");
 
-                        // When send button is clicked, create message object on Parse
+        // Execute query to fetch all messages from Parse asynchronously
 
-                        btSend.setOnClickListener(new View.OnClickListener() {
-                            @Override
+        // This is equivalent to a SELECT query with SQL
 
-                            public void onClick(View v) {
+        query.findInBackground(new FindCallback<Message>() {
 
-                                String data = etMessage.getText().toString();
+            public void done(List<Message> messages, ParseException e) {
 
-                /*ParseObject message = ParseObject.create("Message");
+                if (e == null) {
 
-                message.put(USER_ID_KEY, ParseUser.getCurrentUser().getObjectId());
+                    mMessages.clear();
 
-                message.put(BODY_KEY, data);*/
-                                Message message = new Message();
+                    mMessages.addAll(messages);
+                    Log.d ("DEBUG", "messages"+messages.size());
 
-                                message.setBody(data);
+                    mAdapter.notifyDataSetChanged(); // update adapter
 
-                                message.setUserId(ParseUser.getCurrentUser().getObjectId());
+                    // Scroll to the bottom of the list on initial load
 
-                                message.saveInBackground(new SaveCallback() {
+                    if (mFirstLoad) {
 
-                                    @Override
+                        rvChat.scrollToPosition(0);
 
-                                    public void done(ParseException e) {
+                        mFirstLoad = false;
 
-                                        if (e == null) {
+                    }
 
-                                            Toast.makeText(ChatActivity.this, "Successfully created message on Parse",
+                } else {
 
-                                                    Toast.LENGTH_SHORT).show();
+                    Log.e("message", "Error Loading Messages" + e);
+                }
+            }
+        });
+    }
 
-                                        } else {
+    // Create an anonymous user using ParseAnonymousUtils and set sUserId
 
-                                            Log.e(TAG, "Failed to save message", e);
+    void login() {
 
-                                        }
+        ParseAnonymousUtils.logIn(new LogInCallback() {
+            @Override
+            public void done(ParseUser user, ParseException e) {
+                if (e != null) {
+                    Log.e(TAG, "Anonymous login failed: ", e);
 
-                                    }
-
-                                });
-
-                                etMessage.setText(null);
-
-                            }
-
-
-                            void refreshMessages() {
-
-                                // Construct query to execute
-
-                                ParseQuery<Message> query = ParseQuery.getQuery(Message.class);
-
-                                // Configure limit and sort order
-                                query.setLimit(MAX_CHAT_MESSAGES_TO_SHOW);
-
-
-                                // get the latest 50 messages, order will show up newest to oldest of this group
-
-                                query.orderByDescending("createdAt");
-
-                                // Execute query to fetch all messages from Parse asynchronously
-
-                                // This is equivalent to a SELECT query with SQL
-
-                                query.findInBackground(new FindCallback<Message>() {
-
-                                    public void done(List<Message> messages, ParseException e) {
-
-                                        if (e == null) {
-
-                                            mMessages.clear();
-
-                                            mMessages.addAll(messages);
-
-                                            mAdapter.notifyDataSetChanged(); // update adapter
-
-                                            // Scroll to the bottom of the list on initial load
-
-                                            if (mFirstLoad) {
-
-                                                rvChat.scrollToPosition(0);
-
-                                                mFirstLoad = false;
-
-                                            }
-
-                                        } else {
-
-                                            Log.e("message", "Error Loading Messages" + e);
-
-                                        }
-
-                                    }
-
-                                });
-
-                            }
-
-
-                            // Create an anonymous user using ParseAnonymousUtils and set sUserId
-
-                            void login() {
-
-                                ParseAnonymousUtils.logIn(new LogInCallback() {
-
-                                    @Override
-
-                                    public void done(ParseUser user, ParseException e) {
-
-                                        if (e != null) {
-
-                                            Log.e(TAG, "Anonymous login failed: ", e);
-
-                                        } else {
-
-                                            startWithCurrentUser();
-
-                                        }
-
-                                    }
-
-                                });
-
-                            }
-                        }
+                } else {
+                    startWithCurrentUser();
+                }
+            }
+        });
+    }
+}
